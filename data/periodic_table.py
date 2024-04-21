@@ -25,3 +25,6 @@ class PeriodicTable(SqlAlchemyBase):
         self.is_metal = data[5]
         self.type = data[6]
         self.wiki = data[7]
+
+    def __str__(self):
+        return self.formula
