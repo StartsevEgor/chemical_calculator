@@ -14,6 +14,7 @@ class PeriodicTable(SqlAlchemyBase):
     period = sqlalchemy.Column(sqlalchemy.String, nullable=False)
     is_metal = sqlalchemy.Column(sqlalchemy.Boolean, default=False)
     type = sqlalchemy.Column(sqlalchemy.String, nullable=False)
+    electronegativity = sqlalchemy.Column(sqlalchemy.Integer, nullable=False)
     wiki = sqlalchemy.Column(sqlalchemy.String, nullable=False)
 
     def __init__(self, data):
@@ -24,7 +25,8 @@ class PeriodicTable(SqlAlchemyBase):
         self.period = data[4]
         self.is_metal = data[5]
         self.type = data[6]
-        self.wiki = data[7]
+        self.electronegativity = data[7]
+        self.wiki = data[8]
 
     def __str__(self):
         return self.formula

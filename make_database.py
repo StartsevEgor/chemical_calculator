@@ -20,9 +20,9 @@ def record(source, model, session):
             unpacking = str_.strip().split(" - ")
             if unpacking[1] in old_table:
                 continue
-            unpacking.append(wiki.page(unpacking[1]).fullurl)
             unpacking = [int(i) if i.isdigit() else i for i in unpacking]
             unpacking = [False if j == "0b" else (True if j == "1b" else j) for j in unpacking]
+            unpacking.append(wiki.page(unpacking[1]).fullurl)
             data = model(unpacking)
             session.add(data)
             session.commit()

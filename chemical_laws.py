@@ -1,10 +1,26 @@
 from data import db_session
 from data.periodic_table import PeriodicTable
 from data.acid_residues import AcidResides
+from data.acids import Acids
 import itertools
 import math
-
 db_session.global_init("db/substances.db")
+
+
+def lists_compare(list1, list2):
+    list1.sort()
+    list2.sort()
+    return list1 == list2
+
+
+def count_letters(text):
+    count = sum([1 if i.isalpha() else 0 for i in text])
+    return count
+
+
+def get_coefficient(request, source):
+    return (f'{request}'
+            f'{len(list(filter(lambda x: request in x if count_letters(x) == len(request) else False, list(source.keys())))) + 1}')
 
 
 def gcd(*args):
@@ -18,8 +34,11 @@ def gcd(*args):
 
 def get_data(request, table):
     request = request.capitalize() if table == PeriodicTable else request
+    if table == PeriodicTable:
+        request = "".join([i for i in request if not i.isdigit()])
     db_sess = db_session.create_session()
     answer = db_sess.query(table).filter(table.formula == request).first()
+    db_sess.close()
     return answer if answer else None
 
 
@@ -67,7 +86,6 @@ def acid_resides_or_oh(request):
                 copy_request.remove(element2)
                 copy_request.remove(element3)
                 if gcd_elements != 1:
-                    print(f"({string_}){gcd_elements}")
                     result.append([f"({string_}){gcd_elements}", [element1, element2, element3]])
                 else:
                     result.append([string_, [element1, element2, element3]])
@@ -166,7 +184,10 @@ def recognition(request):
             coefficient = 1
         data = test_combinations(part_with_brackets, coefficient, is_acid_reside=True)
         data = acid_resides_or_oh(data)[0][0]
-        decoding["кислотный остаток" if "OH" not in data else "OH"] = data
+        if "OH" in data:
+            decoding[get_coefficient("OH", decoding)] = data
+        else:
+            decoding[get_coefficient("КО", decoding)] = data
         request[i] = request[i].replace(substance[substance.find("("):substance.find(")") + 1 + len(str(coefficient))],
                                         "")
     for substance in request:
@@ -176,25 +197,116 @@ def recognition(request):
         if data:
             for ar_or_oh in acid_resides_or_oh(data):
                 if "OH" in ar_or_oh[0]:
-                    decoding["OH"] = ar_or_oh[0]
+                    decoding[get_coefficient("OH", decoding)] = ar_or_oh[0]
                 else:
-                    decoding["кислотный остаток"] = ar_or_oh[0]
+                    decoding[get_coefficient("КО", decoding)] = ar_or_oh[0]
                 for i in ar_or_oh[1]:
                     data.remove(i)
-            print(1, data)
             for element in data:
                 name, number = element[0], element[1]
                 if name == "H":
-                    decoding["H"] = f"{name}{number if number > 1 else ''}"
+                    decoding[get_coefficient("H", decoding)] = f"{name}{number if number > 1 else ''}"
                 elif name == "O":
-                    decoding["O"] = f"{name}{number if number > 1 else ''}"
+                    decoding[get_coefficient("O", decoding)] = f"{name}{number if number > 1 else ''}"
                 elif get_data(name, PeriodicTable).is_metal:
-                    decoding["металл"] = f"{name}{number if number > 1 else ''}"
+                    decoding[get_coefficient("Me", decoding)] = f"{name}{number if number > 1 else ''}"
                 else:
-                    decoding["неметалл"] = f"{name}{number if number > 1 else ''}"
+                    decoding[get_coefficient("!Me", decoding)] = f"{name}{number if number > 1 else ''}"
         elif not decoding:
             return None
     return decoding
 
 
-print(4, recognition(input("Введите реакцию: ")))
+def chemical_laws(request):
+    if not request:
+        return "Реакции не произойдёт, либо вы ввели вещества в неподходящем формате"
+    keys = list(request.keys())
+    strong_acids = ['HI', 'HBr', 'HCl', 'HNO3', 'HClO4', 'HClO3', 'HBrO3', 'H2SO4', 'HMnO4', 'H2Cr2O7']
+    alkali_metals = ['K', 'Na', 'Ba', 'Ca', 'Mg']
+    if (lists_compare(["H1", "КО1", "Me1", "КО2"], keys) and get_data(request["Me1"], PeriodicTable).electronegativity <
+            get_data(request["H1"], PeriodicTable).electronegativity):
+        return f"{request['Me1']}{request['КО1']} + {request['H1']}{request['КО2']}"
+    elif ((lists_compare(["H1", "КО1", "Me1", "O1"], keys) and get_data(request["Me1"],
+                                                                        PeriodicTable).electronegativity < get_data(
+        request["H1"], PeriodicTable).electronegativity) and
+          all([get_data(request["Me1"], PeriodicTable).electronegativity,
+               get_data(request["H1"], PeriodicTable).electronegativity])):
+        return f"{request['Me1']}{request['КО1']} + H20"
+    elif (lists_compare(["Me1", "КО1", "Me2", "КО2"],
+                        keys) and f"{request['Me1']}{request['КО1']}" != f"{request['Me1']}{request['КО2']}"):
+        return f"{request['Me1']}{request['КО2']} + {request['Me2']}{request['КО1']}"
+    elif lists_compare(["Me1", "O1"], keys):
+        return f"{request['Me1']}{request['O1']}"
+    elif lists_compare(["!Me1", "O1"], keys):
+        return f"{request['!Me1']}{request['O1']}"
+    elif lists_compare(["H1", "КО1", "Me1", "OH1"], keys):
+        if ((request['Me1'] in alkali_metals and f"{request['H1']}{request['КО1']}" in strong_acids) or
+                request['Me1'] not in alkali_metals):
+            return f"{request['Me1']}{request['КО1']} + H2O"
+    elif lists_compare(["Me1", "КО1", "Me2", "КО2"], keys) and (f"{request['Me2']}{request['КО1']}" not in
+                                                                [f"{request['Me1']}{request['КО1']}",
+                                                                 f"{request['Me2']}{request['КО2']}"]
+                                                                and f"{request['Me1']}{request['КО2']}" not in
+                                                                [f"{request['Me1']}{request['КО1']}",
+                                                                 f"{request['Me2']}{request['КО2']}"]):
+        return f"{request['Me2']}{request['КО1']} + {request['Me1']}{request['КО2']}"
+    elif (lists_compare(["H1", "КО1", "Me1"], keys) and (get_data(request["Me1"],
+                                                                  PeriodicTable).electronegativity < get_data(
+        request["H1"], PeriodicTable).electronegativity)):
+        return f"{request['Me1']}{request['КО1']} + H2"
+    elif (lists_compare(["Me1", "OH1", "Me2", "O1"], keys) and (get_data(request["Me2"],
+                                                                         PeriodicTable).electronegativity < get_data(
+        request["Me1"], PeriodicTable).electronegativity) and
+          all([get_data(request["Me1"], PeriodicTable).electronegativity,
+               get_data(request["Me2"], PeriodicTable).electronegativity])):
+        return f"{request['Me2']}{request['OH1']} + {request['Me1']}{request['O1']}"
+    elif (lists_compare(["Me1", "OH1", "Me2", "КО1"], keys) and (get_data(request["Me2"],
+                                                                         PeriodicTable).electronegativity > get_data(
+        request["Me1"], PeriodicTable).electronegativity) and
+          all([get_data(request["Me1"], PeriodicTable).electronegativity,
+               get_data(request["Me2"], PeriodicTable).electronegativity])):
+        return f"{request['Me2']}{request['КО1']} + {request['Me1']}{request['OH1']}"
+    elif lists_compare(["Me1", "КО1"], keys) and (get_data(request["КО1"], PeriodicTable)):
+        return f"{request['Me1']}{request['КО1']}"
+    elif lists_compare(["H1", "КО1"], keys) and (get_data(request["КО1"], PeriodicTable)):
+        return f"{request['H1']}{request['КО1']}"
+    elif (lists_compare(["Me1", "O1", "Me2"], keys) and (get_data(request["Me2"],
+                                                                  PeriodicTable).electronegativity < get_data(
+        request["Me1"], PeriodicTable).electronegativity) and
+          all([get_data(request["Me1"], PeriodicTable).electronegativity,
+               get_data(request["Me2"], PeriodicTable).electronegativity])):
+        return f"{request['Me2']}{request['O1']} + {request['Me1']}"
+    elif (lists_compare(["Me1", "OH1", "Me2"], keys) and (get_data(request["Me2"],
+                                                                   PeriodicTable).electronegativity < get_data(
+        request["Me1"], PeriodicTable).electronegativity) and
+          all([get_data(request["Me1"], PeriodicTable).electronegativity,
+               get_data(request["Me2"], PeriodicTable).electronegativity])):
+        return f"{request['Me2']}{request['OH1']} + {request['Me1']}"
+    elif (lists_compare(["Me1", "КО1", "Me2"], keys) and (get_data(request["Me2"],
+                                                                   PeriodicTable).electronegativity < get_data(
+        request["Me1"], PeriodicTable).electronegativity) and
+          all([get_data(request["Me1"], PeriodicTable).electronegativity,
+               get_data(request["Me2"], PeriodicTable).electronegativity])):
+        return f"{request['Me2']}{request['КО1']} + {request['Me1']}"
+    elif (lists_compare(["H1", "КО1", "Me1"], keys) and (get_data(request["Me1"],
+                                                                   PeriodicTable).electronegativity < get_data(
+        request["H1"], PeriodicTable).electronegativity) and
+          all([get_data(request["H1"], PeriodicTable).electronegativity,
+               get_data(request["Me1"], PeriodicTable).electronegativity])):
+        return f"{request['Me1']}{request['КО1']} + {request['H1']}"
+    else:
+        return "Реакции не произойдёт, либо вы ввели вещества в неподходящем формате"
+
+
+def building_substance(request):
+    if not request:
+        return "Реакции не произойдёт, либо вы ввели вещества в неподходящем формате"
+    keys = list(request.keys())
+    if len(keys) == 1:
+        return request[keys[0]]
+    if lists_compare(["Me1", "КО1"], keys):
+        return f"{request['Me1']}{request['КО1']}"
+    elif lists_compare(["Me1", "OH1"], keys):
+        return f"{request['Me1']}{request['OH1']}"
+    else:
+        return "".join([request[i] for i in keys])
